@@ -1,0 +1,10 @@
+.DS_Store
+node_modules/
+# PlatformIO
+firmware/**/.pio/
+firmware/**/.pio-host/
+firmware/**/.vscode/
+# Пароль Wi-Fi — только локально (образец: include/secrets.example.h)
+firmware/**/include/secrets.h
+# локальные настройки Claude Code
+.claude/settings.local.json

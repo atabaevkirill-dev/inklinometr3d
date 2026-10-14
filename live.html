@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Живые данные платформы</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/live.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="logo">◭</span>
+      <span>Тестовая платформа — живые данные</span>
+      <small>200×200 мм · 3 инклинометра · ESP32</small>
+    </div>
+    <div class="top-right">
+      <select id="src" title="Источник данных">
+        <option value="serial">USB (Web Serial)</option>
+        <option value="ws">Wi-Fi (WebSocket)</option>
+        <option value="demo">Демо без железа</option>
+      </select>
+      <input id="wsUrl" class="ws-url" value="ws://leveler.local:81" title="Адрес ESP32">
+      <button id="connBtn" class="btn small primary">Подключить</button>
+      <span id="connState" class="badge idle">нет связи</span>
+      <a class="btn small" href="index.html">Симуляция</a>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="viewport">
+      <div id="view3d"></div>
+      <div class="overlay tr">
+        <label class="exag">Усиление наклона на экране ×<b id="exagVal">20</b>
+          <input type="range" id="exag" min="1" max="100" value="20">
+        </label>
+      </div>
+      <div class="overlay tl">
+        <div class="legend">
+          <div class="legend-title">Связь</div>
+          <div class="kv"><span>Плата</span><b id="devInfo">—</b></div>
+          <div class="kv"><span>Опрос / приём</span><b id="rates">—</b></div>
+          <div class="kv"><span>Последние данные</span><b id="age">—</b></div>
+        </div>
+      </div>
+      <div id="banner" class="fault-banner hidden"></div>
+    </section>
+
+    <section class="bottom live-bottom">
+      <div class="card bubble-card">
+        <div class="card-title">Уровень</div>
+        <canvas id="bubble"></canvas>
+      </div>
+      <div class="card">
+        <div class="card-title">Наклон платформы, ° · лог. шкала · зелёное — допуск</div>
+        <canvas id="chartTilt"></canvas>
+      </div>
+      <div class="card">
+        <div class="card-title">Расхождение каждого датчика с общим наклоном, °</div>
+        <canvas id="chartDev"></canvas>
+      </div>
+    </section>
+
+    <aside class="side">
+      <div class="panel">
+        <h2>Наклон платформы</h2>
+        <div class="big-tilt">
+          <div><span>X</span><b id="fx">—</b></div>
+          <div><span>Y</span><b id="fy">—</b></div>
+        </div>
+        <div class="kv"><span>Полный наклон</span><b id="ftot">—</b></div>
+        <div class="kv"><span>Высокая сторона</span><b id="fdir">—</b></div>
+        <div class="kv"><span>Перепад по углам платформы</span><b id="fspread">—</b></div>
+        <div class="kv"><span>Датчиков в работе</span><b id="fused">—</b></div>
+        <div class="grid2">
+          <label class="fld">Допуск, ° <input type="number" id="tol" min="0.001" max="1" step="0.005" value="0.02"></label>
+          <label class="fld">Фильтр τ, с <input type="number" id="tau" min="0.05" max="5" step="0.05" value="0.5"></label>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Инклинометры</h2>
+        <table class="tbl">
+          <thead><tr><th>Датчик</th><th>X, °</th><th>Y, °</th><th>Шум, °</th><th>t, °C</th><th>Статус</th></tr></thead>
+          <tbody id="sensBody"></tbody>
+        </table>
+        <button class="btn small" id="resetBtn" style="margin-top:8px">↺ Вернуть датчики в работу</button>
+      </div>
+
+      <div class="panel">
+        <h2>Ручное выравнивание</h2>
+        <p class="note-s">Три опорных винта под платформой. Подкручивайте по подсказке, пока всё не станет зелёным.</p>
+        <div class="grid2">
+          <label class="fld">Шаг резьбы винта, мм/об
+            <select id="pitch"><option value="0.5">M3 — 0.5</option><option value="0.7">M4 — 0.7</option><option value="0.8">M5 — 0.8</option><option value="1" selected>M6 — 1.0</option><option value="1.25">M8 — 1.25</option></select>
+          </label>
+          <label class="fld">Что не трогаем
+            <select id="ref"><option value="A">опору A</option><option value="B">опору B</option><option value="C">опору C</option><option value="raise">только поднимать</option><option value="center">центр на месте</option></select>
+          </label>
+        </div>
+        <div id="screws" class="screws"></div>
+        <details class="geom">
+          <summary>Где стоят опоры (мм от центра)</summary>
+          <div class="grid3" id="screwPos"></div>
+        </details>
+      </div>
+
+      <div class="panel" id="servoPanel">
+        <h2>Самовыравнивание — сервоприводы</h2>
+        <div id="servoNone" class="note-s">Плата не сообщила о сервоприводах. В демо и в прошивке с сервами (по умолчанию Feetech STS3215) здесь появится управление.</div>
+        <div id="servoUi" class="hidden">
+          <div class="row gap">
+            <button class="btn primary" id="autoBtn">▶ Включить авто</button>
+            <button class="btn small" id="homeBtn">Нейтраль</button>
+            <span id="lvState" class="badge idle">—</span>
+          </div>
+          <label class="fld">Общий подъём платформы <b id="hVal">0.0</b> мм
+            <input type="range" id="hRange" min="-10" max="10" step="0.1" value="0">
+          </label>
+          <div id="servoRows" class="servo-rows"></div>
+          <div class="note-s" id="servoNote"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Калибровка нуля</h2>
+        <p class="note-s"><b>Разворотом на 180°</b> — эталонная поверхность не нужна: смещения датчиков и наклон стола считаются из двух замеров.</p>
+        <div class="cal-steps">
+          <button class="btn small" id="cal1">1. Замер</button>
+          <span class="arrow">→ развернуть на 180° на том же месте →</span>
+          <button class="btn small" id="cal2" disabled>2. Замер</button>
+        </div>
+        <div id="calMsg" class="note-s"></div>
+        <div class="row gap">
+          <button class="btn small" id="zeroBtn" title="Платформа на заведомо ровной поверхности">Обнулить здесь</button>
+          <button class="btn small" id="clearBtn">Сбросить калибровку</button>
+          <button class="btn small demo-only" id="rotBtn">Развернуть (демо)</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Запись эксперимента</h2>
+        <div class="row gap">
+          <button class="btn small" id="recBtn">● Начать запись</button>
+          <button class="btn small" id="csvBtn" disabled>Скачать CSV</button>
+          <span id="recInfo" class="muted"></span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Журнал платы</h2>
+        <div class="row gap">
+          <input id="cmd" class="cmd" placeholder="команда: info, zero, tau 0.5, rate 20…">
+          <button class="btn small" id="cmdBtn">Отправить</button>
+        </div>
+        <div id="log" class="log"></div>
+      </div>
+    </aside>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/live-sources.js"></script>
+  <script src="js/live.js"></script>
+</body>
+</html>

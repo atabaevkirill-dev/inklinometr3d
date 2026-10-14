@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Выравнивание по 3 точкам</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="logo">◭</span>
+      <span>Выравнивание по 3 точкам</span>
+      <small>симуляция · плита 1000×1000 мм · 3 опоры · 3 инклинометра</small>
+    </div>
+    <div class="top-right">
+      <span id="stateBadge" class="badge idle">Ожидание</span>
+      <span class="simtime">t = <b id="simTime">0.0</b> с</span>
+      <label class="inline">Скорость
+        <select id="speed">
+          <option value="0.5">×0.5</option>
+          <option value="1" selected>×1</option>
+          <option value="2">×2</option>
+          <option value="5">×5</option>
+          <option value="10">×10</option>
+          <option value="25">×25</option>
+        </select>
+      </label>
+      <button id="pauseBtn" class="btn small">⏸ Пауза</button>
+      <a class="btn small" href="calc.html" style="text-decoration:none">Расчёт 3 vs 4 опоры →</a>
+      <a class="btn small" href="live.html" style="text-decoration:none">Живые данные →</a>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="viewport">
+      <div id="view3d"></div>
+      <div class="overlay tl">
+        <div class="legend">
+          <div class="legend-title">Отклонение поверхности от центра</div>
+          <div class="scale"></div>
+          <div class="scale-labels"><span>−2 мм</span><span>0</span><span>+2 мм</span></div>
+        </div>
+      </div>
+      <div class="overlay tr">
+        <label class="exag">Усиление наклона на экране ×<b id="exagVal">5</b>
+          <input type="range" id="exag" min="1" max="30" value="5">
+        </label>
+      </div>
+      <div class="overlay bl hint">ЛКМ — вращать · ПКМ — сдвиг · колесо — масштаб · двойной клик по плите — поставить груз · Esc — стоп · Пробел — пауза</div>
+      <div id="faultBanner" class="fault-banner hidden"></div>
+    </section>
+
+    <section class="bottom">
+      <div class="card bubble-card">
+        <div class="card-title">Уровень</div>
+        <canvas id="bubble"></canvas>
+      </div>
+      <div class="card">
+        <div class="card-title">Наклон (контроллер), ° · лог. шкала · зелёное — допуск</div>
+        <canvas id="chartTilt"></canvas>
+      </div>
+      <div class="card">
+        <div class="card-title">Высота верха плиты в центре, мм</div>
+        <canvas id="chartHeight"></canvas>
+      </div>
+      <div class="card">
+        <div class="card-title">Поправки опор относительно среднего хода, мм</div>
+        <canvas id="chartCorr"></canvas>
+      </div>
+    </section>
+
+    <aside class="side">
+      <div class="panel">
+        <h2>Управление</h2>
+        <div class="field">
+          <div class="lbl">Уставка высоты <span class="muted">(верх плиты от пола)</span></div>
+          <div class="row">
+            <input type="range" id="heightRange" step="1" value="800">
+            <input type="number" id="heightNum" step="1" value="800">
+            <span class="unit">мм</span>
+          </div>
+        </div>
+        <div class="btn-grid">
+          <button class="btn primary span3" data-cmd="auto">▶ АВТО: подъём → выравнивание</button>
+          <button class="btn" data-cmd="lift">▲ Подъём</button>
+          <button class="btn" data-cmd="level">◎ Выровнять</button>
+          <button class="btn" data-cmd="lower">▼ Опустить</button>
+          <button class="btn danger span2" data-cmd="stop">■ СТОП <kbd>Esc</kbd></button>
+          <button class="btn" data-cmd="reset">↺ Сброс</button>
+        </div>
+        <div class="grid2">
+          <label class="fld">Стратегия
+            <select id="strategy">
+              <option value="center">Держать высоту центра</option>
+              <option value="raise">Только подъём опор</option>
+            </select>
+          </label>
+          <label class="fld">Допуск горизонта, °
+            <input type="number" id="tol" min="0.005" max="0.5" step="0.005" value="0.02">
+          </label>
+        </div>
+        <label class="check"><input type="checkbox" id="stabilize" checked> Стабилизация — сама исправлять отклонения</label>
+      </div>
+
+      <div class="panel">
+        <h2>Железо</h2>
+        <label class="fld">Привод опор <select id="hwAct"></select></label>
+        <div class="hw-note" id="hwActNote"></div>
+        <label class="fld">Инклинометры (2 оси) <select id="hwIncl"></select></label>
+        <div class="hw-note" id="hwInclNote"></div>
+        <div class="grid2">
+          <label class="fld">Сколько инклинометров
+            <select id="hwCount"><option value="1">1</option><option value="2">2</option><option value="3" selected>3</option></select>
+          </label>
+          <label class="fld">Температура <b id="tempVal">20</b> °C
+            <input type="range" id="temp" min="0" max="50" value="20">
+          </label>
+        </div>
+        <label class="fld">Датчик высоты <select id="hwHeight"></select></label>
+        <div id="verdict" class="verdict"></div>
+        <div id="assess" class="assess"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Состояние</h2>
+        <div class="kv-cols">
+          <div>
+            <div class="kv-head">Контроллер (измерено)</div>
+            <div class="kv"><span>Наклон X</span><b id="mTiltX">—</b></div>
+            <div class="kv"><span>Наклон Y</span><b id="mTiltY">—</b></div>
+            <div class="kv"><span>Высота</span><b id="mHeight">—</b></div>
+            <div class="kv"><span>Перепад углов</span><b id="mSpread">—</b></div>
+            <div class="kv"><span>Датчиков в работе</span><b id="mUsed">—</b></div>
+          </div>
+          <div>
+            <div class="kv-head">Модель (истина)</div>
+            <div class="kv"><span>Наклон X</span><b id="tTiltX">—</b></div>
+            <div class="kv"><span>Наклон Y</span><b id="tTiltY">—</b></div>
+            <div class="kv"><span>Высота</span><b id="tHeight">—</b></div>
+            <div class="kv"><span>Перепад углов</span><b id="tSpread">—</b></div>
+            <div class="kv"><span>Ошибка высоты</span><b id="tHerr">—</b></div>
+          </div>
+        </div>
+        <div id="lastResult" class="result hidden"></div>
+        <div id="warnings"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Опоры — актуаторы</h2>
+        <table class="tbl">
+          <thead><tr><th>Опора</th><th>Ход, мм</th><th>v, мм/с</th><th>Нагр., кН</th><th>Просадка, мм</th><th>Пол, мм</th></tr></thead>
+          <tbody id="supBody"></tbody>
+        </table>
+      </div>
+
+      <div class="panel">
+        <h2>Инклинометры — 2 оси</h2>
+        <table class="tbl">
+          <thead><tr><th>Датчик</th><th>X, °</th><th>Y, °</th><th>Статус</th><th>Отказ</th></tr></thead>
+          <tbody id="sensBody"></tbody>
+        </table>
+      </div>
+
+      <div class="panel">
+        <h2>Возмущения</h2>
+        <label class="fld">Неровность пола ±<b id="floorAmpVal">12</b> мм
+          <input type="range" id="floorAmp" min="0" max="30" value="12">
+        </label>
+        <div class="row gap">
+          <button class="btn small" id="floorBtn">Новый пол</button>
+          <button class="btn small" id="settleBtn">Просадка опоры</button>
+        </div>
+        <label class="fld">Груз <b id="massVal">150</b> кг
+          <input type="range" id="mass" min="0" max="800" step="10" value="150">
+        </label>
+        <div class="grid2">
+          <label class="fld">X <b id="pxVal">200</b> мм<input type="range" id="px" min="-450" max="450" step="10" value="200"></label>
+          <label class="fld">Y <b id="pyVal">-150</b> мм<input type="range" id="py" min="-450" max="450" step="10" value="-150"></label>
+        </div>
+        <label class="fld">Шум инклинометров σ <b id="noiseVal">0.004</b>°
+          <input type="range" id="noise" min="0.001" max="0.02" step="0.001" value="0.004">
+        </label>
+        <label class="fld">Разброс скоростей моторов ±<b id="motorVal">3</b>%
+          <input type="range" id="motor" min="0" max="10" step="0.5" value="3">
+        </label>
+      </div>
+
+      <div class="panel">
+        <h2>Журнал</h2>
+        <div id="log" class="log"></div>
+      </div>
+    </aside>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/physics.js"></script>
+  <script src="js/controller.js"></script>
+  <script src="js/sim.js"></script>
+  <script src="js/hardware.js"></script>
+  <script src="js/view3d.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

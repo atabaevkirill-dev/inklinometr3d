@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Расчёт опор платформы</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/calc.css">
+</head>
+<body class="doc">
+  <header class="top">
+    <div class="brand">
+      <span class="logo">◭</span>
+      <span>Расчёт: правильно ли выравнивать по 3 точкам</span>
+      <small>плита 1000×1000 мм · МКЭ пластины · подбор привода</small>
+    </div>
+    <div class="top-right">
+      <span id="busy" class="muted"></span>
+      <a class="btn small" href="index.html">← Симуляция</a>
+    </div>
+  </header>
+
+  <div class="doc-layout">
+    <aside class="inputs">
+      <div class="panel">
+        <h2>Плита</h2>
+        <label class="fld">Материал
+          <select id="material"><option value="al" selected>Алюминий</option><option value="steel">Сталь</option></select>
+        </label>
+        <label class="fld">Толщина, мм <input type="number" id="t" min="5" max="80" step="1" value="30"></label>
+      </div>
+      <div class="panel">
+        <h2>Груз (фиксированный)</h2>
+        <label class="fld">Масса, кг <input type="number" id="m" min="0" max="3000" step="10" value="300"></label>
+        <div class="grid2">
+          <label class="fld">ЦТ груза X, мм <input type="number" id="px" min="-450" max="450" step="10" value="150"></label>
+          <label class="fld">ЦТ груза Y, мм <input type="number" id="py" min="-450" max="450" step="10" value="100"></label>
+        </div>
+        <div class="grid2">
+          <label class="fld">Пятно опирания, мм <input type="number" id="ps" min="0" max="900" step="50" value="400"></label>
+          <label class="fld">Высота ЦТ над плитой, мм <input type="number" id="hc" min="0" max="3000" step="10" value="300"></label>
+        </div>
+        <div class="hint-s">X — вправо, Y — назад, от центра плиты.</div>
+      </div>
+      <div class="panel">
+        <h2>Опоры и привод</h2>
+        <label class="fld">Жёсткость опоры с рамой, Н/мм <input type="number" id="k" min="100" max="200000" step="500" value="20000"></label>
+        <div class="grid2">
+          <label class="fld">Скорость подъёма, мм/с <input type="number" id="v" min="1" max="50" step="1" value="5"></label>
+          <label class="fld">Запас по нагрузке <input type="number" id="sf" min="1" max="4" step="0.1" value="1.5"></label>
+        </div>
+        <div class="grid2">
+          <label class="fld">Ход опоры, мм <input type="number" id="stroke" min="50" max="2000" step="10" value="470"></label>
+          <label class="fld">Верх винта
+            <select id="K"><option value="2" selected>свободен вбок</option><option value="0.7">в направляющей</option></select>
+          </label>
+        </div>
+      </div>
+      <button class="btn primary" id="run" style="width:100%">Пересчитать</button>
+    </aside>
+
+    <main class="results" id="results">
+      <section class="panel verdict-card" id="verdict"></section>
+
+      <section class="panel">
+        <h2>1. Раскладка опор и груз на плане</h2>
+        <div class="map-toggle">
+          Фон: <label><input type="radio" name="mapmode" value="allow" checked> сколько ещё груза можно поставить в точку без отрыва опоры</label>
+          <label><input type="radio" name="mapmode" value="defl"> прогиб плиты под вашим грузом</label>
+        </div>
+        <div class="maps" id="maps"></div>
+        <div class="legend-row" id="mapLegend"></div>
+      </section>
+
+      <section class="panel">
+        <h2>2. Сравнение: 3 опоры против 4</h2>
+        <div class="tbl-wrap"><table class="tbl cmp" id="cmp"></table></div>
+        <p class="note" id="cmpNote"></p>
+      </section>
+
+      <section class="panel">
+        <h2>3. Толщина плиты: ровность под грузом</h2>
+        <p class="note">Выравнивание ставит в горизонт плоскость через опоры, но не исправляет прогиб самой плиты между опорами. Ровность поверхности определяет жёсткость плиты.</p>
+        <div class="tbl-wrap"><table class="tbl" id="thick"></table></div>
+      </section>
+
+      <section class="panel">
+        <h2>4. Шарниры: что происходит при наклоне</h2>
+        <p class="note" id="kinNote"></p>
+        <div class="tbl-wrap"><table class="tbl" id="kin"></table></div>
+      </section>
+
+      <section class="panel">
+        <h2>5. Подбор привода: винт, редуктор, мотор</h2>
+        <p class="note" id="driveNote"></p>
+        <div class="tbl-wrap"><table class="tbl drives" id="drives"></table></div>
+        <p class="note">Формулы: момент на моторе T = F·p / (2π·η·i), обороты n = v / p · i · 60.
+          Трапецеидальный винт самотормозящий, если угол подъёма резьбы λ = arctg(p / π·d₂) меньше угла трения ρ′ = arctg(μ / cos 15°), при μ = 0.1.
+          Шаговому мотору нужен запас по моменту ×2, серво — ×1.3. Винт проверяется на продольный изгиб по Эйлеру: Pкр = π²·E·I / (K·L)², I = π·d₃⁴/64, запас ≥ 3.
+          Входные обороты червячного домкрата ограничены 1500 об/мин. Характеристики моторов (при питании драйвера 36–48 В) и КПД редукторов типовые для класса: перед покупкой сверить с каталогом.</p>
+      </section>
+
+      <section class="panel">
+        <h2>6. Проверка расчёта</h2>
+        <div id="verify" class="note"></div>
+      </section>
+    </main>
+  </div>
+
+  <script src="js/physics.js"></script>
+  <script src="js/calc.js"></script>
+  <script src="js/calc-ui.js"></script>
+</body>
+</html>
